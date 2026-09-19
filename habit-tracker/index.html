@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Mis Hábitos</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<div class="app viz-root">
+
+  <header class="app-header">
+    <h1>Mis Hábitos</h1>
+    <button id="theme-toggle" class="icon-btn" type="button" aria-label="Cambiar tema" title="Cambiar tema">◐</button>
+  </header>
+
+  <section class="card" aria-labelledby="today-heading">
+    <div class="card-head">
+      <h2 id="today-heading">Registro diario</h2>
+      <div class="date-nav">
+        <button id="prev-day" class="icon-btn" type="button" aria-label="Día anterior">‹</button>
+        <input id="date-picker" type="date" />
+        <button id="next-day" class="icon-btn" type="button" aria-label="Día siguiente">›</button>
+        <button id="today-btn" class="ghost-btn" type="button">Hoy</button>
+      </div>
+    </div>
+    <ul id="habit-list" class="habit-list"></ul>
+    <form id="add-habit-form" class="add-habit-form">
+      <input id="new-habit-name" type="text" placeholder="Nuevo hábito (ej. Meditar)" maxlength="40" required />
+      <button type="submit" class="primary-btn">Agregar</button>
+    </form>
+  </section>
+
+  <section class="card" aria-labelledby="stats-heading">
+    <div class="card-head">
+      <h2 id="stats-heading">Resumen</h2>
+      <div class="filter-row" role="group" aria-label="Rango de cumplimiento">
+        <button class="chip active" data-range="7" type="button">7 días</button>
+        <button class="chip" data-range="30" type="button">30 días</button>
+      </div>
+    </div>
+    <div id="stat-tiles" class="stat-tiles"></div>
+  </section>
+
+  <section class="card" aria-labelledby="heatmap-heading">
+    <div class="card-head">
+      <h2 id="heatmap-heading">Calendario de constancia</h2>
+      <div class="filter-row">
+        <select id="heatmap-habit-select" aria-label="Filtrar hábito"></select>
+        <button id="heatmap-table-toggle" class="ghost-btn" type="button">Ver como tabla</button>
+      </div>
+    </div>
+    <div id="heatmap-wrap" class="heatmap-wrap"></div>
+    <div id="heatmap-table" class="table-view" hidden></div>
+  </section>
+
+  <section class="card" aria-labelledby="trend-heading">
+    <div class="card-head">
+      <h2 id="trend-heading">Tendencia semanal</h2>
+      <button id="trend-table-toggle" class="ghost-btn" type="button">Ver como tabla</button>
+    </div>
+    <div id="trend-legend" class="legend"></div>
+    <div id="trend-chart" class="trend-chart"></div>
+    <div id="trend-table" class="table-view" hidden></div>
+  </section>
+
+</div>
+<script src="app.js"></script>
+</body>
+</html>
