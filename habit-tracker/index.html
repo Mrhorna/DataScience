@@ -29,6 +29,7 @@
         <button id="today-btn" class="ghost-btn" type="button">Hoy</button>
       </div>
     </div>
+    <div id="energy-row" class="energy-row"></div>
     <div id="checkin-body"></div>
     <form id="add-item-form" class="add-habit-form">
       <input id="new-item-name" type="text" maxlength="40" required />
@@ -67,6 +68,20 @@
     <div id="trend-legend" class="legend"></div>
     <div id="trend-chart" class="trend-chart"></div>
     <div id="trend-table" class="table-view" hidden></div>
+  </section>
+
+  <section class="card" aria-labelledby="data-heading">
+    <div class="card-head">
+      <h2 id="data-heading">Tus datos</h2>
+    </div>
+    <p class="data-note">Todo vive solo en este navegador. Exporta para respaldar o analizar en Excel/Python.</p>
+    <div class="data-actions">
+      <button id="export-csv" class="ghost-btn" type="button">Exportar CSV</button>
+      <button id="export-json" class="ghost-btn" type="button">Respaldo JSON</button>
+      <label class="ghost-btn file-btn">Importar respaldo
+        <input id="import-json" type="file" accept="application/json,.json" hidden />
+      </label>
+    </div>
   </section>
 
 </div>
