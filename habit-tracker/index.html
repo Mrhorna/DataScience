@@ -3,20 +3,25 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Mis Hábitos</title>
+<title>Mi Sistema</title>
 <link rel="stylesheet" href="style.css" />
 </head>
 <body>
 <div class="app viz-root">
 
   <header class="app-header">
-    <h1>Mis Hábitos</h1>
+    <h1>Mi Sistema</h1>
     <button id="theme-toggle" class="icon-btn" type="button" aria-label="Cambiar tema" title="Cambiar tema">◐</button>
   </header>
 
-  <section class="card" aria-labelledby="today-heading">
+  <nav id="section-tabs" class="section-tabs" aria-label="Secciones"></nav>
+
+  <section class="card" aria-labelledby="checkin-heading">
     <div class="card-head">
-      <h2 id="today-heading">Registro diario</h2>
+      <div>
+        <h2 id="checkin-heading">Registro diario</h2>
+        <p id="section-tagline" class="tagline"></p>
+      </div>
       <div class="date-nav">
         <button id="prev-day" class="icon-btn" type="button" aria-label="Día anterior">‹</button>
         <input id="date-picker" type="date" />
@@ -24,9 +29,9 @@
         <button id="today-btn" class="ghost-btn" type="button">Hoy</button>
       </div>
     </div>
-    <ul id="habit-list" class="habit-list"></ul>
-    <form id="add-habit-form" class="add-habit-form">
-      <input id="new-habit-name" type="text" placeholder="Nuevo hábito (ej. Meditar)" maxlength="40" required />
+    <div id="checkin-body"></div>
+    <form id="add-item-form" class="add-habit-form">
+      <input id="new-item-name" type="text" maxlength="40" required />
       <button type="submit" class="primary-btn">Agregar</button>
     </form>
   </section>
@@ -39,14 +44,14 @@
         <button class="chip" data-range="30" type="button">30 días</button>
       </div>
     </div>
-    <div id="stat-tiles" class="stat-tiles"></div>
+    <div id="stats-body"></div>
   </section>
 
   <section class="card" aria-labelledby="heatmap-heading">
     <div class="card-head">
       <h2 id="heatmap-heading">Calendario de constancia</h2>
       <div class="filter-row">
-        <select id="heatmap-habit-select" aria-label="Filtrar hábito"></select>
+        <select id="heatmap-select" aria-label="Filtrar"></select>
         <button id="heatmap-table-toggle" class="ghost-btn" type="button">Ver como tabla</button>
       </div>
     </div>
