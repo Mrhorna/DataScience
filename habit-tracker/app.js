@@ -11,50 +11,82 @@
   const DOW_LABELS = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
   const AGGREGATE_ID = '__complete__';
 
-  function defaultSections() {
-    return [
-      {
-        id: 'perfect-start',
-        name: 'Perfect Start',
-        tagline: 'Win the morning, win the day',
-        type: 'routine',
-        activeDays: WEEKDAYS.slice(),
-        steps: [
-          { id: 'ps-despertar', name: 'Despertar', detail: 'Meta 5:20 - 5:30', colorIdx: 0, wakeWindow: { from: '05:20', to: '05:30' } },
-          { id: 'ps-rucking', name: 'Caminar 30 min', detail: 'Rucking — caminata con peso', colorIdx: 1 },
-          { id: 'ps-gym', name: 'Gym', detail: 'Fuerza + cardio', colorIdx: 2 },
-          { id: 'ps-ducha', name: 'Ducha', colorIdx: 3 },
-          { id: 'ps-trabajo', name: 'Trabajo', colorIdx: 4 },
-        ],
-      },
-      {
-        id: 'habitos',
-        name: 'Hábitos',
-        tagline: 'Constancia diaria, sin horario fijo',
-        type: 'habits',
-        activeDays: ALL_DAYS.slice(),
-        steps: [],
-      },
-    ];
+  function perfectStartSection() {
+    return {
+      id: 'perfect-start',
+      name: 'Perfect Start',
+      tagline: 'Win the morning, win the day',
+      type: 'routine',
+      activeDays: WEEKDAYS.slice(),
+      steps: [
+        { id: 'ps-despertar', name: 'Despertar', detail: 'Meta 5:20 - 5:30', colorIdx: 0, wakeWindow: { from: '05:20', to: '05:30' } },
+        { id: 'ps-rucking', name: 'Caminar 30 min', detail: 'Rucking — caminata con peso', colorIdx: 1 },
+        { id: 'ps-gym', name: 'Gym', detail: 'Fuerza + cardio', colorIdx: 2 },
+        { id: 'ps-ducha', name: 'Ducha', colorIdx: 3 },
+        { id: 'ps-trabajo', name: 'Trabajo', colorIdx: 4 },
+      ],
+    };
   }
 
+  function sleepSection() {
+    return {
+      id: 'sueno',
+      name: 'Hábitos de sueño',
+      tagline: 'La mañana se gana la noche anterior',
+      type: 'sleep',
+      activeDays: ALL_DAYS.slice(),
+      targetHours: 7,
+      bedWindow: { from: '22:20', to: '22:30' },
+      wakeWindow: { from: '05:20', to: '05:30' },
+      steps: [
+        { id: 'sl-pantallas', name: 'Sin pantallas 1h antes', colorIdx: 0 },
+        { id: 'sl-cafeina', name: 'Sin cafeína después del mediodía', colorIdx: 1 },
+        { id: 'sl-cuarto', name: 'Cuarto oscuro y fresco', colorIdx: 2 },
+      ],
+    };
+  }
+
+  function habitsSection() {
+    return {
+      id: 'habitos',
+      name: 'Hábitos',
+      tagline: 'Constancia diaria, sin horario fijo',
+      type: 'habits',
+      activeDays: ALL_DAYS.slice(),
+      steps: [],
+    };
+  }
+
+  function defaultSections() {
+    return [perfectStartSection(), sleepSection(), habitsSection()];
+  }
+
+  // Upgrades in place so a stored state keeps whatever the user has customized.
   function migrate(raw) {
-    if (raw && raw.version === 2) return raw;
-    const sections = defaultSections();
-    if (raw && Array.isArray(raw.habits)) {
-      const habitos = sections.find(s => s.id === 'habitos');
-      habitos.steps = raw.habits.map((h, i) => ({
+    if (!raw) {
+      return { version: 3, sections: defaultSections(), checkins: {}, wakeTimes: {}, bedTimes: {} };
+    }
+    let s = raw;
+    if (!s.version && Array.isArray(s.habits)) {
+      const sections = [perfectStartSection(), habitsSection()];
+      sections[1].steps = s.habits.map((h, i) => ({
         id: h.id,
         name: h.name,
         colorIdx: typeof h.colorIdx === 'number' ? h.colorIdx : i,
       }));
+      s = { version: 2, sections, checkins: s.checkins || {}, wakeTimes: {} };
     }
-    return {
-      version: 2,
-      sections,
-      checkins: (raw && raw.checkins) || {},
-      wakeTimes: {},
-    };
+    if (s.version === 2) {
+      const habitsAt = s.sections.findIndex(x => x.id === 'habitos');
+      if (!s.sections.some(x => x.id === 'sueno')) {
+        s.sections.splice(habitsAt === -1 ? s.sections.length : habitsAt, 0, sleepSection());
+      }
+      s.version = 3;
+    }
+    s.checkins = s.checkins || {};
+    s.wakeTimes = s.wakeTimes || {};
+    s.bedTimes = s.bedTimes || {};
+    return s;
   }
 
   function loadState() {
@@ -118,8 +150,26 @@
     return h * 60 + m;
   }
   function formatMinutes(total) {
-    const h = Math.floor(total / 60), m = Math.round(total % 60);
+    const wrapped = ((Math.round(total) % 1440) + 1440) % 1440;
+    const h = Math.floor(wrapped / 60), m = wrapped % 60;
     return `${h}:${String(m).padStart(2, '0')}`;
+  }
+  function formatDuration(mins) {
+    const h = Math.floor(mins / 60), m = Math.round(mins % 60);
+    if (!h) return `${m}m`;
+    return m ? `${h}h ${m}m` : `${h}h`;
+  }
+  // Bedtimes past midnight are later than ones before it, so they sit above 24h.
+  function bedMinutes(hhmm) {
+    const m = minutesOf(hhmm);
+    return m < 12 * 60 ? m + 1440 : m;
+  }
+  function sleepMinutes(dateStr) {
+    const bed = state.bedTimes[dateStr], wake = state.wakeTimes[dateStr];
+    if (!bed || !wake) return null;
+    let mins = minutesOf(wake) - minutesOf(bed);
+    if (mins <= 0) mins += 1440;
+    return mins;
   }
   function shortDate(d) { return d.toLocaleDateString('es', { day: 'numeric', month: 'short' }); }
 
@@ -164,7 +214,7 @@
     return list.filter(d => isComplete(section, dateKey(d))).length / list.length;
   }
   function streak(section, matcher) {
-    if (!section.activeDays.length || !section.steps.length) return 0;
+    if (!section.activeDays.length) return 0;
     let d = new Date();
     for (let i = 0; i < 14 && !isActiveDay(section, d); i++) d = addDays(d, -1);
     // A day still in progress shouldn't read as a broken streak.
@@ -195,6 +245,52 @@
     });
     const avg = recorded.length ? recorded.reduce((a, b) => a + b, 0) / recorded.length : null;
     return { step, avg, inWindow, recorded: recorded.length, target: minutesOf(step.wakeWindow.to) };
+  }
+  function sleepStats(section, days) {
+    const list = lastActiveDays(section, days);
+    const target = section.targetHours * 60;
+    const durations = [], beds = [];
+    let metTarget = 0, bedInWindow = 0;
+    list.forEach(d => {
+      const ds = dateKey(d);
+      const mins = sleepMinutes(ds);
+      if (mins !== null) {
+        durations.push(mins);
+        if (mins >= target) metTarget++;
+      }
+      const bed = state.bedTimes[ds];
+      if (bed) {
+        beds.push(bedMinutes(bed));
+        if (bedMinutes(bed) <= bedMinutes(section.bedWindow.to)) bedInWindow++;
+      }
+    });
+    return {
+      target,
+      nights: durations.length,
+      avg: durations.length ? durations.reduce((a, b) => a + b, 0) / durations.length : null,
+      metTarget,
+      metRate: durations.length ? metTarget / durations.length : 0,
+      bedAvg: beds.length ? beds.reduce((a, b) => a + b, 0) / beds.length : null,
+      bedRecorded: beds.length,
+      bedInWindow,
+    };
+  }
+  function weeklySleepHours(section, weeksBack) {
+    const thisWeekStart = startOfWeek(new Date());
+    const out = [];
+    for (let w = weeksBack - 1; w >= 0; w--) {
+      const start = addDays(thisWeekStart, -7 * w);
+      let sum = 0, n = 0;
+      for (let i = 0; i < 7; i++) {
+        const d = addDays(start, i);
+        if (isFuture(d)) break;
+        if (!isActiveDay(section, d)) continue;
+        const mins = sleepMinutes(dateKey(d));
+        if (mins !== null) { sum += mins; n++; }
+      }
+      out.push({ weekStart: start, rate: n ? (sum / n) / 60 : null });
+    }
+    return out;
   }
   function weeklyRate(section, matcher, weeksBack) {
     const thisWeekStart = startOfWeek(new Date());
@@ -275,6 +371,8 @@
     document.getElementById('section-tagline').textContent = section.tagline || '';
     document.getElementById('new-item-name').placeholder =
       section.type === 'routine' ? 'Nuevo paso (ej. Meditar 10 min)' : 'Nuevo hábito (ej. Leer 20 páginas)';
+
+    if (section.type === 'sleep') body.appendChild(buildSleepPanel(section, dateStr));
 
     if (!isActiveDay(section, viewDate)) {
       const note = document.createElement('p');
@@ -374,49 +472,128 @@
     body.appendChild(list);
   }
 
-  function buildWakeRow(step, dateStr) {
-    const row = document.createElement('li');
-    row.className = 'wake-row';
+  function buildTimeRow(opts) {
+    const row = document.createElement('div');
+    row.className = 'wake-row' + (opts.flush ? ' flush' : '');
 
     const label = document.createElement('label');
-    label.textContent = 'Hora real:';
-    label.setAttribute('for', 'wake-input');
+    label.textContent = opts.label;
+    label.setAttribute('for', opts.id);
 
     const input = document.createElement('input');
     input.type = 'time';
-    input.id = 'wake-input';
-    input.value = state.wakeTimes[dateStr] || '';
+    input.id = opts.id;
+    input.value = opts.value || '';
 
-    const target = document.createElement('span');
-    target.textContent = `meta ${step.wakeWindow.from}-${step.wakeWindow.to}`;
+    const hint = document.createElement('span');
+    hint.textContent = opts.hint || '';
 
     const status = document.createElement('span');
     status.className = 'wake-status';
 
-    function paintStatus() {
-      const value = state.wakeTimes[dateStr];
-      if (!value) { status.textContent = ''; status.className = 'wake-status'; return; }
-      const diff = minutesOf(value) - minutesOf(step.wakeWindow.to);
-      if (diff <= 0) {
-        status.textContent = '✓ En ventana';
-        status.className = 'wake-status ok';
-      } else {
-        status.textContent = `▲ ${diff} min tarde`;
-        status.className = 'wake-status late';
-      }
+    function paint() {
+      const s = input.value ? opts.status(input.value) : null;
+      status.textContent = s ? s.text : '';
+      status.className = 'wake-status' + (s ? ' ' + s.tone : '');
     }
-    paintStatus();
+    paint();
 
     input.addEventListener('change', () => {
-      if (input.value) state.wakeTimes[dateStr] = input.value;
-      else delete state.wakeTimes[dateStr];
-      saveState();
-      paintStatus();
-      renderStats();
+      opts.onChange(input.value);
+      paint();
+      if (opts.after) opts.after();
     });
 
-    row.append(label, input, target, status);
+    row.append(label, input, hint, status);
     return row;
+  }
+
+  function wakeStatusFor(window) {
+    return value => {
+      const diff = minutesOf(value) - minutesOf(window.to);
+      return diff <= 0
+        ? { text: '✓ En ventana', tone: 'ok' }
+        : { text: `▲ ${diff} min tarde`, tone: 'late' };
+    };
+  }
+
+  function setWakeTime(dateStr, value) {
+    if (value) state.wakeTimes[dateStr] = value;
+    else delete state.wakeTimes[dateStr];
+    saveState();
+  }
+
+  function buildWakeRow(step, dateStr) {
+    const li = document.createElement('li');
+    li.appendChild(buildTimeRow({
+      id: 'wake-input',
+      label: 'Hora real:',
+      value: state.wakeTimes[dateStr],
+      hint: `meta ${step.wakeWindow.from}-${step.wakeWindow.to}`,
+      status: wakeStatusFor(step.wakeWindow),
+      onChange: v => setWakeTime(dateStr, v),
+      after: renderStats,
+    }));
+    return li;
+  }
+
+  function buildSleepPanel(section, dateStr) {
+    const panel = document.createElement('div');
+    panel.className = 'sleep-panel';
+
+    const readout = document.createElement('div');
+    readout.className = 'sleep-readout';
+
+    function refresh() {
+      const mins = sleepMinutes(dateStr);
+      if (mins === null) {
+        readout.innerHTML = '<span class="sleep-hours">—</span><span class="stat-sub">Registra ambas horas para calcular tu sueño</span>';
+        return;
+      }
+      const diff = mins - section.targetHours * 60;
+      const label = diff >= 0
+        ? `✓ meta de ${section.targetHours}h cumplida`
+        : `▲ ${formatDuration(-diff)} bajo la meta`;
+      readout.innerHTML = `<span class="sleep-hours">${formatDuration(mins)}</span>` +
+        `<span class="wake-status ${diff >= 0 ? 'ok' : 'late'}">${label}</span>`;
+    }
+
+    const afterChange = () => { refresh(); renderStats(); renderHeatmap(); renderTrend(); };
+
+    panel.appendChild(buildTimeRow({
+      id: 'bed-input',
+      label: 'Anoche me acosté:',
+      flush: true,
+      value: state.bedTimes[dateStr],
+      hint: `meta ${section.bedWindow.from}-${section.bedWindow.to}`,
+      status: value => {
+        const diff = bedMinutes(value) - bedMinutes(section.bedWindow.to);
+        return diff <= 0
+          ? { text: '✓ En ventana', tone: 'ok' }
+          : { text: `▲ ${diff} min tarde`, tone: 'late' };
+      },
+      onChange: v => {
+        if (v) state.bedTimes[dateStr] = v;
+        else delete state.bedTimes[dateStr];
+        saveState();
+      },
+      after: afterChange,
+    }));
+
+    panel.appendChild(buildTimeRow({
+      id: 'sleep-wake-input',
+      label: 'Hoy desperté:',
+      flush: true,
+      value: state.wakeTimes[dateStr],
+      hint: `meta ${section.wakeWindow.from}-${section.wakeWindow.to}`,
+      status: wakeStatusFor(section.wakeWindow),
+      onChange: v => setWakeTime(dateStr, v),
+      after: afterChange,
+    }));
+
+    refresh();
+    panel.appendChild(readout);
+    return panel;
   }
 
   // ---------- stats ----------
@@ -425,6 +602,11 @@
     const body = document.getElementById('stats-body');
     const range = ui(section).range;
     body.innerHTML = '';
+
+    if (section.type === 'sleep') {
+      renderSleepStats(section, body, range);
+      return;
+    }
 
     if (!section.steps.length) {
       body.innerHTML = '<div class="empty-state">Agrega algo para ver estadísticas.</div>';
@@ -436,6 +618,66 @@
     } else {
       renderHabitStats(section, body, range);
     }
+  }
+
+  function renderSleepStats(section, body, range) {
+    const s = sleepStats(section, range);
+    const metPct = Math.round(s.metRate * 100);
+    const nightStreak = streak(section, ds => {
+      const mins = sleepMinutes(ds);
+      return mins !== null && mins >= s.target;
+    });
+
+    const hero = document.createElement('div');
+    hero.className = 'hero-tiles';
+    hero.innerHTML = `
+      <div class="hero-tile">
+        <div class="hero-label">Sueño promedio</div>
+        <div class="hero-value">${s.avg === null ? '—' : formatDuration(s.avg)}</div>
+        <div class="stat-sub">meta ${section.targetHours}h · ${s.nights} ${s.nights === 1 ? 'noche' : 'noches'} con dato</div>
+      </div>
+      <div class="hero-tile">
+        <div class="hero-label">Noches con meta</div>
+        <div class="hero-value">${metPct}<span class="hero-unit">%</span></div>
+        <div class="stat-sub">${s.metTarget}/${s.nights} noches de ${s.target / 60}h+</div>
+        <div class="meter-track"><div class="meter-fill" style="width:${metPct}%;background:${colorVar(6)}"></div></div>
+      </div>
+      <div class="hero-tile">
+        <div class="hero-label">Racha actual</div>
+        <div class="hero-value">${nightStreak} <span class="hero-unit">${nightStreak === 1 ? 'noche' : 'noches'}</span></div>
+        <div class="stat-sub">seguidas cumpliendo la meta</div>
+      </div>
+      <div class="hero-tile">
+        <div class="hero-label">Me acuesto a las</div>
+        <div class="hero-value">${s.bedAvg === null ? '—' : formatMinutes(s.bedAvg)}</div>
+        <div class="stat-sub">${s.bedRecorded ? `${s.bedInWindow}/${s.bedRecorded} dentro de ventana` : 'sin horas registradas aún'}</div>
+      </div>
+    `;
+    body.appendChild(hero);
+
+    if (!section.steps.length) return;
+
+    const title = document.createElement('p');
+    title.className = 'meters-title';
+    title.textContent = `Hábitos de apoyo (últimos ${range} días)`;
+    body.appendChild(title);
+
+    const meters = document.createElement('div');
+    meters.className = 'step-meters';
+    section.steps.forEach(step => {
+      const p = Math.round(stepRate(section, step.id, range) * 100);
+      const row = document.createElement('div');
+      row.innerHTML = `
+        <div class="meter-row-head">
+          <span class="habit-dot" style="background:${colorVar(step.colorIdx)}"></span>
+          <span>${escapeHtml(step.name)}</span>
+          <span class="pct">${p}%</span>
+        </div>
+        <div class="meter-track"><div class="meter-fill" style="width:${p}%;background:${colorVar(step.colorIdx)}"></div></div>
+      `;
+      meters.appendChild(row);
+    });
+    body.appendChild(meters);
   }
 
   function renderRoutineStats(section, body, range) {
@@ -534,7 +776,9 @@
     sel.innerHTML = '';
     const all = document.createElement('option');
     all.value = 'all';
-    all.textContent = section.type === 'routine' ? 'Rutina completa' : 'Todos los hábitos';
+    all.textContent = section.type === 'routine' ? 'Rutina completa'
+      : section.type === 'sleep' ? 'Horas dormidas'
+      : 'Todos los hábitos';
     sel.appendChild(all);
     section.steps.forEach(step => {
       const opt = document.createElement('option');
@@ -544,6 +788,17 @@
     });
     sel.value = [...sel.options].some(o => o.value === prev) ? prev : 'all';
     ui(section).heatmapFilter = sel.value;
+  }
+
+  // Stepped tighter than the generic ramp: the 4-7h band is where sleep actually varies.
+  function sleepColor(mins, target) {
+    if (mins === null) return 'var(--gridline)';
+    const ratio = mins / target;
+    if (ratio < 0.7) return 'var(--seq-100)';
+    if (ratio < 0.85) return 'var(--seq-250)';
+    if (ratio < 0.95) return 'var(--seq-400)';
+    if (ratio < 1) return 'var(--seq-550)';
+    return 'var(--seq-700)';
   }
 
   function seqColor(frac) {
@@ -562,7 +817,7 @@
     const wrap = document.getElementById('heatmap-wrap');
     wrap.innerHTML = '';
 
-    if (!section.steps.length) {
+    if (!section.steps.length && section.type !== 'sleep') {
       wrap.innerHTML = '<div class="empty-state">Sin datos todavía.</div>';
       document.getElementById('heatmap-table').innerHTML = '';
       return;
@@ -586,7 +841,11 @@
         if (isFuture(d)) continue;
         const ds = dateKey(d);
         let fill, title;
-        if (filter === 'all') {
+        if (filter === 'all' && section.type === 'sleep') {
+          const mins = sleepMinutes(ds);
+          fill = sleepColor(mins, section.targetHours * 60);
+          title = mins === null ? `${ds}: sin registro` : `${ds}: ${formatDuration(mins)} de sueño`;
+        } else if (filter === 'all') {
           const frac = dayFraction(section, ds);
           fill = seqColor(frac);
           title = `${ds}: ${Math.round(frac * 100)}% de la rutina`;
@@ -605,10 +864,11 @@
     const legend = document.createElement('div');
     legend.className = 'heatmap-legend';
     if (filter === 'all') {
-      legend.innerHTML = 'Menos ' +
-        ['var(--gridline)', 'var(--seq-100)', 'var(--seq-250)', 'var(--seq-400)', 'var(--seq-550)', 'var(--seq-700)']
-          .map(c => `<span class="swatch" style="background:${c}"></span>`).join('') +
-        ' Más';
+      const ramp = ['var(--gridline)', 'var(--seq-100)', 'var(--seq-250)', 'var(--seq-400)', 'var(--seq-550)', 'var(--seq-700)']
+        .map(c => `<span class="swatch" style="background:${c}"></span>`).join('');
+      legend.innerHTML = section.type === 'sleep'
+        ? `Menos horas ${ramp} ${section.targetHours}h+`
+        : `Menos ${ramp} Más`;
     } else {
       legend.innerHTML = `<span class="swatch" style="background:var(--gridline)"></span> No cumplido&nbsp;&nbsp;<span class="swatch" style="background:${colorVar(step ? step.colorIdx : 0)}"></span> Cumplido`;
     }
@@ -620,21 +880,56 @@
   function renderHeatmapTable(section, filter) {
     const tableWrap = document.getElementById('heatmap-table');
     const days = lastActiveDays(section, 30);
-    const head = filter === 'all' ? '% de la rutina' : 'Cumplido';
+    const isSleepHours = filter === 'all' && section.type === 'sleep';
+    const head = isSleepHours ? 'Horas dormidas' : filter === 'all' ? '% de la rutina' : 'Cumplido';
     const rows = days.map(d => {
       const ds = dateKey(d);
-      const val = filter === 'all'
-        ? `${Math.round(dayFraction(section, ds) * 100)}%`
-        : (isChecked(ds, filter) ? 'Sí' : 'No');
+      let val;
+      if (isSleepHours) {
+        const mins = sleepMinutes(ds);
+        val = mins === null ? '—' : formatDuration(mins);
+      } else if (filter === 'all') {
+        val = `${Math.round(dayFraction(section, ds) * 100)}%`;
+      } else {
+        val = isChecked(ds, filter) ? 'Sí' : 'No';
+      }
       return `<tr><td>${ds}</td><td>${val}</td></tr>`;
     }).join('');
     tableWrap.innerHTML = `<table><thead><tr><th>Fecha</th><th>${head}</th></tr></thead><tbody>${rows}</tbody></table>`;
   }
 
   // ---------- trend ----------
+  function trendScale(section) {
+    if (section.type === 'sleep') {
+      return {
+        max: 10,
+        ticks: [0, 2, 4, 6, 8, 10],
+        fmtAxis: v => `${v}h`,
+        fmtValue: v => formatDuration(v * 60),
+        ref: { value: section.targetHours, label: `meta ${section.targetHours}h` },
+      };
+    }
+    return {
+      max: 1,
+      ticks: [0, 0.25, 0.5, 0.75, 1],
+      fmtAxis: v => `${Math.round(v * 100)}%`,
+      fmtValue: v => `${Math.round(v * 100)}%`,
+    };
+  }
+
   function trendSeriesFor(section) {
     const hidden = ui(section).hidden;
     const all = [];
+    if (section.type === 'sleep') {
+      all.push({
+        id: 'sleep-hours',
+        name: 'Horas dormidas',
+        color: colorVar(6),
+        emphasis: true,
+        points: weeklySleepHours(section, TREND_WEEKS),
+      });
+      return { all, visible: all };
+    }
     if (section.type === 'routine') {
       all.push({
         id: AGGREGATE_ID,
@@ -677,7 +972,7 @@
   function renderTrend() {
     const section = currentSection();
     const container = document.getElementById('trend-chart');
-    if (!section.steps.length) {
+    if (!section.steps.length && section.type !== 'sleep') {
       document.getElementById('trend-legend').innerHTML = '';
       container.innerHTML = '<div class="empty-state">Sin datos todavía.</div>';
       document.getElementById('trend-table').innerHTML = '';
@@ -693,19 +988,29 @@
       return;
     }
 
+    const scale = trendScale(section);
     const n = TREND_WEEKS;
     const W = 640, H = 220, padL = 40, padT = 12, padB = 22;
     const padR = visible.length <= 4 ? 110 : 16;
     const plotW = W - padL - padR, plotH = H - padT - padB;
     const xAt = i => padL + (n <= 1 ? 0 : (i / (n - 1)) * plotW);
-    const yAt = v => padT + (1 - v) * plotH;
+    const yAt = v => padT + (1 - v / scale.max) * plotH;
+    const lastPoint = s => {
+      for (let i = s.points.length - 1; i >= 0; i--) if (s.points[i].rate !== null) return { i, p: s.points[i] };
+      return null;
+    };
 
-    let svg = `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Tendencia semanal de cumplimiento">`;
-    [0, 0.25, 0.5, 0.75, 1].forEach(v => {
+    let svg = `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Tendencia semanal">`;
+    scale.ticks.forEach(v => {
       const y = yAt(v);
       svg += `<line class="grid-line" x1="${padL}" y1="${y}" x2="${W - padR}" y2="${y}"></line>`;
-      svg += `<text class="axis-label" x="${padL - 6}" y="${y + 3}" text-anchor="end">${Math.round(v * 100)}%</text>`;
+      svg += `<text class="axis-label" x="${padL - 6}" y="${y + 3}" text-anchor="end">${scale.fmtAxis(v)}</text>`;
     });
+    if (scale.ref) {
+      const y = yAt(scale.ref.value);
+      svg += `<line x1="${padL}" y1="${y}" x2="${W - padR}" y2="${y}" stroke="var(--baseline)" stroke-width="1.5" stroke-dasharray="4 3"></line>`;
+      svg += `<text class="axis-label" x="${W - padR - 2}" y="${y - 4}" text-anchor="end">${scale.ref.label}</text>`;
+    }
     [0, Math.floor((n - 1) / 2), n - 1].forEach(i => {
       const d = visible[0].points[i] && visible[0].points[i].weekStart;
       if (!d) return;
@@ -713,23 +1018,37 @@
     });
 
     visible.forEach(s => {
-      const pathD = s.points.map((p, i) => `${i === 0 ? 'M' : 'L'}${xAt(i).toFixed(1)},${yAt(p.rate).toFixed(1)}`).join(' ');
-      svg += `<path d="${pathD}" fill="none" stroke="${s.color}" stroke-width="${s.emphasis ? 3 : 2}" stroke-linecap="round" stroke-linejoin="round"></path>`;
-      const last = s.points[s.points.length - 1];
-      svg += `<circle cx="${xAt(n - 1)}" cy="${yAt(last.rate)}" r="${s.emphasis ? 3.5 : 2.5}" fill="${s.color}"></circle>`;
+      // Weeks without data break the line instead of dropping it to zero.
+      let pathD = '', pen = false;
+      s.points.forEach((p, i) => {
+        if (p.rate === null) { pen = false; return; }
+        pathD += `${pen ? 'L' : 'M'}${xAt(i).toFixed(1)},${yAt(p.rate).toFixed(1)} `;
+        pen = true;
+      });
+      if (pathD) {
+        svg += `<path d="${pathD.trim()}" fill="none" stroke="${s.color}" stroke-width="${s.emphasis ? 3 : 2}" stroke-linecap="round" stroke-linejoin="round"></path>`;
+      }
+      const last = lastPoint(s);
+      if (last) {
+        svg += `<circle cx="${xAt(last.i)}" cy="${yAt(last.p.rate)}" r="${s.emphasis ? 3.5 : 2.5}" fill="${s.color}"></circle>`;
+      }
     });
 
     if (visible.length <= 4) {
       const MIN_GAP = 11, top = padT + 4, bottom = H - padB - 4;
       const labels = visible
-        .map(s => ({ s, y: yAt(s.points[s.points.length - 1].rate) }))
+        .map(s => ({ s, last: lastPoint(s) }))
+        .filter(l => l.last)
+        .map(l => ({ s: l.s, y: yAt(l.last.p.rate) }))
         .sort((a, b) => a.y - b.y);
       for (let i = 1; i < labels.length; i++) {
         if (labels[i].y - labels[i - 1].y < MIN_GAP) labels[i].y = labels[i - 1].y + MIN_GAP;
       }
-      const overflow = labels[labels.length - 1].y - bottom;
-      if (overflow > 0) labels.forEach(l => { l.y -= overflow; });
-      if (labels[0].y < top) labels.forEach(l => { l.y += top - labels[0].y; });
+      if (labels.length) {
+        const overflow = labels[labels.length - 1].y - bottom;
+        if (overflow > 0) labels.forEach(l => { l.y -= overflow; });
+        if (labels[0].y < top) labels.forEach(l => { l.y += top - labels[0].y; });
+      }
       labels.forEach(({ s, y }) => {
         svg += `<text class="axis-label" x="${xAt(n - 1) + 6}" y="${y + 3}" fill="${s.color}" style="font-weight:600">${escapeHtml(s.name)}</text>`;
       });
@@ -748,20 +1067,23 @@
 
     const svgEl = container.querySelector('svg');
     svgEl.querySelectorAll('.hover-col').forEach(rect => {
-      const show = () => showTooltip(rect, visible, tooltip, svgEl, xAt);
+      const show = () => showTooltip(rect, visible, tooltip, svgEl, xAt, scale);
       rect.addEventListener('mouseenter', show);
       rect.addEventListener('mousemove', show);
       rect.addEventListener('mouseleave', () => { tooltip.style.display = 'none'; });
     });
 
-    renderTrendTable(visible);
+    renderTrendTable(visible, scale);
   }
 
-  function showTooltip(rect, series, tooltip, svgEl, xAt) {
+  function showTooltip(rect, series, tooltip, svgEl, xAt, scale) {
     const i = Number(rect.dataset.i);
     if (!series.length) return;
     let html = `<strong>Semana del ${shortDate(series[0].points[i].weekStart)}</strong><br>`;
-    series.forEach(s => { html += `${Math.round(s.points[i].rate * 100)}% ${escapeHtml(s.name)}<br>`; });
+    series.forEach(s => {
+      const v = s.points[i].rate;
+      html += `${v === null ? 'sin dato' : scale.fmtValue(v)} · ${escapeHtml(s.name)}<br>`;
+    });
     tooltip.innerHTML = html;
     tooltip.style.display = 'block';
     const svgRect = svgEl.getBoundingClientRect();
@@ -770,7 +1092,7 @@
     tooltip.style.top = '2px';
   }
 
-  function renderTrendTable(series) {
+  function renderTrendTable(series, scale) {
     const wrap = document.getElementById('trend-table');
     if (!series.length) { wrap.innerHTML = ''; return; }
     const n = series[0].points.length;
@@ -778,7 +1100,7 @@
     let rows = '';
     for (let i = 0; i < n; i++) {
       rows += `<tr><td>${shortDate(series[0].points[i].weekStart)}</td>` +
-        series.map(s => `<td>${Math.round(s.points[i].rate * 100)}%</td>`).join('') + '</tr>';
+        series.map(s => `<td>${s.points[i].rate === null ? '—' : scale.fmtValue(s.points[i].rate)}</td>`).join('') + '</tr>';
     }
     wrap.innerHTML = `<table><thead>${head}</thead><tbody>${rows}</tbody></table>`;
   }

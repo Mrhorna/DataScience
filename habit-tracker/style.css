@@ -325,6 +325,31 @@ body {
 .wake-status.ok { color: var(--success-text); }
 .wake-status.late { color: var(--text-primary); }
 
+.wake-row.flush { margin-left: 0; }
+
+.sleep-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+.sleep-panel .wake-row { margin-bottom: 0; }
+.sleep-panel label { min-width: 116px; }
+.sleep-readout {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.sleep-hours {
+  font-size: 1.6rem;
+  font-weight: 600;
+  line-height: 1.1;
+}
+
 .inactive-note {
   margin: 0 0 10px;
   padding: 8px 10px;
