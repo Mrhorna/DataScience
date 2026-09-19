@@ -239,6 +239,58 @@ body {
 }
 .habit-remove:hover { color: var(--series-8); }
 
+.energy-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 8px 10px;
+  margin-bottom: 12px;
+  border-radius: 8px;
+  background: var(--gridline);
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+.energy-label { font-weight: 600; }
+.energy-group { display: flex; gap: 4px; }
+.energy-btn {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface-1);
+  color: var(--text-secondary);
+  font-family: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+.energy-btn:hover { border-color: var(--text-muted); }
+.energy-btn.active {
+  background: var(--text-primary);
+  color: var(--surface-1);
+  border-color: var(--text-primary);
+  font-weight: 600;
+}
+.energy-note { color: var(--text-muted); }
+
+.score-explainer {
+  margin: 0 0 10px;
+  font-size: 0.76rem;
+  color: var(--text-muted);
+}
+
+.data-note {
+  margin: 0 0 10px;
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+}
+.data-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.file-btn { cursor: pointer; display: inline-block; }
+
 /* Routine chain: mirrors the bracket in the original sketch */
 .routine-list {
   list-style: none;

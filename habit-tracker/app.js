@@ -6,6 +6,8 @@
   const SERIES_VARS = ['--series-1', '--series-2', '--series-3', '--series-4', '--series-5', '--series-6', '--series-7', '--series-8'];
   const HEATMAP_WEEKS = 18;
   const TREND_WEEKS = 12;
+  const SCORE_WINDOW_DAYS = 180;
+  const ENERGY_LABELS = ['Muy baja', 'Baja', 'Normal', 'Alta', 'Muy alta'];
   const WEEKDAYS = [1, 2, 3, 4, 5];
   const ALL_DAYS = [0, 1, 2, 3, 4, 5, 6];
   const DOW_LABELS = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
@@ -63,10 +65,7 @@
 
   // Upgrades in place so a stored state keeps whatever the user has customized.
   function migrate(raw) {
-    if (!raw) {
-      return { version: 3, sections: defaultSections(), checkins: {}, wakeTimes: {}, bedTimes: {} };
-    }
-    let s = raw;
+    let s = raw || { version: 4, sections: defaultSections() };
     if (!s.version && Array.isArray(s.habits)) {
       const sections = [perfectStartSection(), habitsSection()];
       sections[1].steps = s.habits.map((h, i) => ({
@@ -83,9 +82,11 @@
       }
       s.version = 3;
     }
+    if (s.version === 3) s.version = 4;
     s.checkins = s.checkins || {};
     s.wakeTimes = s.wakeTimes || {};
     s.bedTimes = s.bedTimes || {};
+    s.energy = s.energy || {};
     return s;
   }
 
@@ -213,6 +214,36 @@
     if (!list.length) return 0;
     return list.filter(d => isComplete(section, dateKey(d))).length / list.length;
   }
+  // Exponentially weighted habit strength (Loop Habit Tracker's formula): a missed
+  // day nudges the score down instead of resetting it. Half-life is 13 days for a
+  // daily habit, stretched for sparser schedules.
+  function habitScore(section, matcher) {
+    if (!section.activeDays.length) return 0;
+    const start = sectionStart(section);
+    if (!start) return 0;
+    const multiplier = Math.pow(0.5, Math.sqrt(section.activeDays.length / 7) / 13);
+    const days = lastActiveDays(section, SCORE_WINDOW_DAYS)
+      .filter(d => dateKey(d) >= start)
+      .reverse();
+    let score = 0;
+    days.forEach(d => {
+      score = score * multiplier + (matcher(dateKey(d)) ? 1 : 0) * (1 - multiplier);
+    });
+    return score;
+  }
+
+  // Scoring from the first day with data keeps a new section from reading as months of failure.
+  function sectionStart(section) {
+    let earliest = null;
+    const consider = ds => { if (ds && (!earliest || ds < earliest)) earliest = ds; };
+    Object.keys(state.checkins).forEach(ds => {
+      if (section.steps.some(step => state.checkins[ds][step.id] !== undefined)) consider(ds);
+    });
+    if (section.type === 'sleep') Object.keys(state.bedTimes).forEach(consider);
+    if (section.steps.some(step => step.wakeWindow)) Object.keys(state.wakeTimes).forEach(consider);
+    return earliest;
+  }
+
   function streak(section, matcher) {
     if (!section.activeDays.length) return 0;
     let d = new Date();
@@ -352,6 +383,58 @@
       });
       nav.appendChild(btn);
     });
+  }
+
+  function energyAverage(days) {
+    let sum = 0, n = 0;
+    let d = new Date();
+    for (let i = 0; i < days; i++) {
+      const v = state.energy[dateKey(d)];
+      if (v) { sum += v; n++; }
+      d = addDays(d, -1);
+    }
+    return n ? { avg: sum / n, n } : null;
+  }
+
+  function renderEnergyRow() {
+    const wrap = document.getElementById('energy-row');
+    const dateStr = dateKey(viewDate);
+    wrap.innerHTML = '';
+
+    const label = document.createElement('span');
+    label.className = 'energy-label';
+    label.textContent = 'Energía:';
+    wrap.appendChild(label);
+
+    const group = document.createElement('div');
+    group.className = 'energy-group';
+    group.setAttribute('role', 'group');
+    group.setAttribute('aria-label', 'Nivel de energía del día');
+    for (let v = 1; v <= 5; v++) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'energy-btn' + (state.energy[dateStr] === v ? ' active' : '');
+      btn.textContent = v;
+      btn.title = ENERGY_LABELS[v - 1];
+      btn.setAttribute('aria-pressed', String(state.energy[dateStr] === v));
+      btn.addEventListener('click', () => {
+        if (state.energy[dateStr] === v) delete state.energy[dateStr];
+        else state.energy[dateStr] = v;
+        saveState();
+        renderEnergyRow();
+      });
+      group.appendChild(btn);
+    }
+    wrap.appendChild(group);
+
+    const note = document.createElement('span');
+    note.className = 'energy-note';
+    const current = state.energy[dateStr];
+    const avg = energyAverage(7);
+    note.textContent = current
+      ? `${ENERGY_LABELS[current - 1]}${avg ? ` · promedio 7d: ${avg.avg.toFixed(1)}` : ''}`
+      : (avg ? `promedio 7d: ${avg.avg.toFixed(1)}` : 'sin registrar');
+    wrap.appendChild(note);
   }
 
   // ---------- daily check-in ----------
@@ -620,13 +703,24 @@
     }
   }
 
+  function scoreExplainer() {
+    const p = document.createElement('p');
+    p.className = 'score-explainer';
+    p.textContent = 'La fuerza pondera tus últimas semanas: un día perdido la baja un poco, no la reinicia.';
+    return p;
+  }
+
   function renderSleepStats(section, body, range) {
     const s = sleepStats(section, range);
     const metPct = Math.round(s.metRate * 100);
-    const nightStreak = streak(section, ds => {
+    const onTarget = ds => {
       const mins = sleepMinutes(ds);
       return mins !== null && mins >= s.target;
-    });
+    };
+    const nightStreak = streak(section, onTarget);
+    const strength = Math.round(habitScore(section, onTarget) * 100);
+
+    body.appendChild(scoreExplainer());
 
     const hero = document.createElement('div');
     hero.className = 'hero-tiles';
@@ -643,9 +737,10 @@
         <div class="meter-track"><div class="meter-fill" style="width:${metPct}%;background:${colorVar(6)}"></div></div>
       </div>
       <div class="hero-tile">
-        <div class="hero-label">Racha actual</div>
-        <div class="hero-value">${nightStreak} <span class="hero-unit">${nightStreak === 1 ? 'noche' : 'noches'}</span></div>
-        <div class="stat-sub">seguidas cumpliendo la meta</div>
+        <div class="hero-label">Fuerza del hábito</div>
+        <div class="hero-value">${strength}<span class="hero-unit">%</span></div>
+        <div class="stat-sub">racha: ${nightStreak} ${nightStreak === 1 ? 'noche' : 'noches'}</div>
+        <div class="meter-track"><div class="meter-fill" style="width:${strength}%;background:${colorVar(6)}"></div></div>
       </div>
       <div class="hero-tile">
         <div class="hero-label">Me acuesto a las</div>
@@ -683,16 +778,20 @@
   function renderRoutineStats(section, body, range) {
     const suffix = activeDaysLabel(section);
     const chainStreak = streak(section, ds => isComplete(section, ds));
+    const strength = Math.round(habitScore(section, ds => isComplete(section, ds)) * 100);
     const pct = Math.round(completeRate(section, range) * 100);
     const wake = wakeStats(section, range);
+
+    body.appendChild(scoreExplainer());
 
     const hero = document.createElement('div');
     hero.className = 'hero-tiles';
     hero.innerHTML = `
       <div class="hero-tile">
-        <div class="hero-label">Racha actual</div>
-        <div class="hero-value">${chainStreak} <span class="hero-unit">${chainStreak === 1 ? 'día' : 'días'}</span></div>
-        <div class="stat-sub">Perfect Starts seguidos</div>
+        <div class="hero-label">Fuerza de la rutina</div>
+        <div class="hero-value">${strength}<span class="hero-unit">%</span></div>
+        <div class="stat-sub">racha: ${chainStreak} ${chainStreak === 1 ? 'día' : 'días'}</div>
+        <div class="meter-track"><div class="meter-fill" style="width:${strength}%;background:${colorVar(0)}"></div></div>
       </div>
       <div class="hero-tile">
         <div class="hero-label">Rutina completa</div>
@@ -721,6 +820,8 @@
     const rates = section.steps.map(s => ({ step: s, rate: stepRate(section, s.id, range) }));
     const anyData = rates.some(r => r.rate > 0);
     const weakest = anyData ? rates.reduce((a, b) => (b.rate < a.rate ? b : a)) : null;
+    // With every step tied there is no weak link to point at.
+    const maxRate = Math.max(...rates.map(r => r.rate));
 
     const title = document.createElement('p');
     title.className = 'meters-title';
@@ -731,7 +832,7 @@
     meters.className = 'step-meters';
     rates.forEach(({ step, rate }) => {
       const p = Math.round(rate * 100);
-      const isWeak = weakest && step.id === weakest.step.id && rates.length > 1 && weakest.rate < 1;
+      const isWeak = weakest && step.id === weakest.step.id && weakest.rate < maxRate;
       const row = document.createElement('div');
       row.innerHTML = `
         <div class="meter-row-head">
@@ -748,10 +849,12 @@
   }
 
   function renderHabitStats(section, body, range) {
+    body.appendChild(scoreExplainer());
     const tiles = document.createElement('div');
     tiles.className = 'stat-tiles';
     section.steps.forEach(step => {
       const s = streak(section, ds => isChecked(ds, step.id));
+      const strength = Math.round(habitScore(section, ds => isChecked(ds, step.id)) * 100);
       const pct = Math.round(stepRate(section, step.id, range) * 100);
       const tile = document.createElement('div');
       tile.className = 'stat-tile';
@@ -760,9 +863,9 @@
           <span class="habit-dot" style="background:${colorVar(step.colorIdx)}"></span>
           <span>${escapeHtml(step.name)}</span>
         </div>
-        <div class="stat-value">${s} ${s === 1 ? 'día' : 'días'} 🔥</div>
-        <div class="stat-sub">${pct}% cumplido (${range}d)</div>
-        <div class="meter-track"><div class="meter-fill" style="width:${pct}%;background:${colorVar(step.colorIdx)}"></div></div>
+        <div class="stat-value">${strength}% <span class="hero-unit">fuerza</span></div>
+        <div class="stat-sub">${pct}% cumplido (${range}d) · racha ${s}</div>
+        <div class="meter-track"><div class="meter-fill" style="width:${strength}%;background:${colorVar(step.colorIdx)}"></div></div>
       `;
       tiles.appendChild(tile);
     });
@@ -1105,10 +1208,77 @@
     wrap.innerHTML = `<table><thead>${head}</thead><tbody>${rows}</tbody></table>`;
   }
 
+  // ---------- export / import ----------
+  function csvField(value) {
+    const s = String(value);
+    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  }
+
+  function buildCsv() {
+    const stepIndex = {};
+    state.sections.forEach(sec => sec.steps.forEach(step => { stepIndex[step.id] = { sec, step }; }));
+
+    const dates = new Set([
+      ...Object.keys(state.checkins),
+      ...Object.keys(state.wakeTimes),
+      ...Object.keys(state.bedTimes),
+      ...Object.keys(state.energy),
+    ]);
+
+    const rows = [['fecha', 'seccion', 'metrica', 'item', 'valor']];
+    [...dates].sort().forEach(ds => {
+      Object.keys(state.checkins[ds] || {}).forEach(stepId => {
+        const found = stepIndex[stepId];
+        rows.push([ds, found ? found.sec.id : 'eliminado', 'check', found ? found.step.name : stepId,
+          state.checkins[ds][stepId] ? 1 : 0]);
+      });
+      if (state.bedTimes[ds]) rows.push([ds, 'sueno', 'hora_acostarse', '', state.bedTimes[ds]]);
+      if (state.wakeTimes[ds]) rows.push([ds, 'sueno', 'hora_despertar', '', state.wakeTimes[ds]]);
+      const mins = sleepMinutes(ds);
+      if (mins !== null) rows.push([ds, 'sueno', 'horas_dormidas', '', (mins / 60).toFixed(2)]);
+      if (state.energy[ds]) rows.push([ds, 'global', 'energia', '', state.energy[ds]]);
+    });
+    return rows.map(r => r.map(csvField).join(',')).join('\n');
+  }
+
+  function download(filename, content, type) {
+    const blob = new Blob([content], { type });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  }
+
+  function importJson(file) {
+    const reader = new FileReader();
+    reader.onload = () => {
+      let parsed;
+      try { parsed = JSON.parse(reader.result); }
+      catch (e) { alert('Ese archivo no es un JSON válido.'); return; }
+      if (!parsed || !Array.isArray(parsed.sections)) {
+        alert('Ese JSON no parece un respaldo de Mi Sistema.');
+        return;
+      }
+      if (!confirm('Esto reemplazará todos los datos de este navegador. ¿Continuar?')) return;
+      state = migrate(parsed);
+      saveState();
+      activeSectionId = state.sections[0].id;
+      Object.keys(uiBySection).forEach(k => delete uiBySection[k]);
+      renderAll();
+      alert('Respaldo restaurado.');
+    };
+    reader.readAsText(file);
+  }
+
   // ---------- wiring ----------
   function renderAll() {
     renderTabs();
     renderDatePicker();
+    renderEnergyRow();
     renderCheckin();
     renderRangeChips();
     renderStats();
@@ -1123,31 +1293,37 @@
     });
   }
 
-  document.getElementById('prev-day').addEventListener('click', () => {
-    viewDate = addDays(viewDate, -1);
+  function goToDate(d) {
+    viewDate = d;
     renderDatePicker();
+    renderEnergyRow();
     renderCheckin();
-  });
+  }
+
+  document.getElementById('prev-day').addEventListener('click', () => goToDate(addDays(viewDate, -1)));
   document.getElementById('next-day').addEventListener('click', () => {
     const next = addDays(viewDate, 1);
-    if (isFuture(next)) return;
-    viewDate = next;
-    renderDatePicker();
-    renderCheckin();
+    if (!isFuture(next)) goToDate(next);
   });
-  document.getElementById('today-btn').addEventListener('click', () => {
-    viewDate = new Date();
-    renderDatePicker();
-    renderCheckin();
-  });
+  document.getElementById('today-btn').addEventListener('click', () => goToDate(new Date()));
   document.getElementById('date-picker').addEventListener('change', e => {
     if (!e.target.value) return;
     const [y, m, d] = e.target.value.split('-').map(Number);
     const picked = new Date(y, m - 1, d);
     if (isFuture(picked)) { renderDatePicker(); return; }
-    viewDate = picked;
-    renderDatePicker();
-    renderCheckin();
+    goToDate(picked);
+  });
+
+  document.getElementById('export-csv').addEventListener('click', () => {
+    download(`mi-sistema-${dateKey(new Date())}.csv`, buildCsv(), 'text/csv;charset=utf-8');
+  });
+  document.getElementById('export-json').addEventListener('click', () => {
+    download(`mi-sistema-respaldo-${dateKey(new Date())}.json`, JSON.stringify(state, null, 2), 'application/json');
+  });
+  document.getElementById('import-json').addEventListener('change', e => {
+    const file = e.target.files && e.target.files[0];
+    if (file) importJson(file);
+    e.target.value = '';
   });
 
   document.getElementById('add-item-form').addEventListener('submit', e => {
