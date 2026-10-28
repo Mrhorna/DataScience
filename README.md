@@ -33,6 +33,16 @@ La app se usa a diario desde el celular, así que la pantalla está ordenada por
 - Ningún diálogo nativo del navegador: confirmaciones y avisos se muestran en la página.
 - Objetivos de toque de 44px, estados de foco visibles, y respeto por `prefers-reduced-motion`.
 
+El layout se adapta en tres niveles, con el mismo HTML:
+
+| Ancho | Layout |
+|---|---|
+| < 900px | Una columna: hoy → resumen → calendario → tendencia |
+| ≥ 900px | Barra lateral con navegación vertical + contenido en una columna |
+| ≥ 1200px | Barra lateral + dos columnas: la acción del día a la izquierda, todo el análisis a la derecha |
+
+El pie con las acciones de datos va al final del HTML (para que el orden de tabulación llegue primero a las casillas del día) y se reposiciona bajo la barra lateral con CSS grid.
+
 ### Pruebas
 
 `habit-tracker/test/regression.js` cubre la fórmula de fuerza (recalculándola de forma independiente), el progreso, el registro de energía, el modo edición con su borrado en dos pasos, el ciclo completo de exportar/importar y el eslabón más débil.

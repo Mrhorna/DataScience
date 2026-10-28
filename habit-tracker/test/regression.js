@@ -162,6 +162,37 @@ const check = (label, actual, expected) => {
   check('badge on the lagging step',
     (await page.locator('.meter-row-head').filter({ has: page.locator('.weak-badge') }).innerText()).split('\n')[0], 'Gym');
 
+  // --- responsive layout ---
+  console.log('\n[7] Layout at phone, tablet and desktop widths');
+  for (const [name, w, h, chartsBeside] of [
+    ['phone', 390, 844, false],
+    ['tablet', 960, 1100, false],
+    ['desktop', 1440, 1000, true],
+  ]) {
+    const p = await ctx.newPage();
+    p.on('pageerror', e => logs.push(e.message));
+    await p.setViewportSize({ width: w, height: h });
+    await p.goto(`${BASE}/index.html`);
+    await p.waitForTimeout(500);
+    const m = await p.evaluate(() => {
+      const box = s => { const el = document.querySelector(s); const b = el.getBoundingClientRect();
+        return { x: Math.round(b.x), w: Math.round(b.width) }; };
+      const focusable = [...document.querySelectorAll('button, input, select, label.file-btn')]
+        .filter(el => el.offsetParent !== null && !el.disabled);
+      return {
+        overflow: document.documentElement.scrollWidth > document.documentElement.clientWidth,
+        today: box('.today-card'),
+        charts: box('[data-panel="heatmap"]'),
+        checkIdx: focusable.findIndex(el => el.classList.contains('habit-check')),
+        exportIdx: focusable.findIndex(el => el.id === 'export-csv'),
+      };
+    });
+    check(`${name}: no horizontal scroll`, m.overflow, false);
+    check(`${name}: charts beside the day`, m.charts.x > m.today.x + m.today.w - 20, chartsBeside);
+    check(`${name}: day reachable before export keys`, m.checkIdx < m.exportIdx, true);
+    await p.close();
+  }
+
   console.log('\nconsole errors:', JSON.stringify(logs));
   console.log(failures === 0 ? '\nALL CHECKS PASSED' : `\n${failures} CHECK(S) FAILED`);
   await browser.close();
