@@ -110,13 +110,22 @@ body {
   * { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
 }
 
+/* Phone: everything flattens into one column in reading order. */
 .app {
+  display: flex;
+  flex-direction: column;
   max-width: 720px;
   margin: 0 auto;
   padding-left: max(16px, env(safe-area-inset-left, 0px));
   padding-right: max(16px, env(safe-area-inset-right, 0px));
   padding-block: 20px 56px;
 }
+.sidebar, .main, .col-primary, .col-secondary { display: contents; }
+.app-header { order: 1; }
+.section-switch { order: 2; }
+.today-card { order: 3; }
+.panel { order: 4; }
+.data-footer { order: 5; }
 
 .app-header {
   display: flex;
@@ -795,4 +804,87 @@ select {
   .hero-value { font-size: 1.5rem; }
   .today-card { padding: 16px 13px; }
   .date-nav #today-btn { padding-inline: 12px; }
+}
+
+/* ---------- desktop: a sidebar app, not a stretched phone page ---------- */
+@media (min-width: 900px) {
+  .app {
+    display: grid;
+    grid-template-columns: 236px minmax(0, 1fr);
+    grid-template-rows: auto 1fr;
+    gap: 40px;
+    align-items: start;
+    max-width: 1340px;
+    padding-left: max(28px, env(safe-area-inset-left, 0px));
+    padding-right: max(28px, env(safe-area-inset-right, 0px));
+    padding-block: 32px 64px;
+  }
+
+  /* The footer stays last in the DOM, for tab order, and moves under the rail here. */
+  .sidebar { grid-column: 1; grid-row: 1; position: sticky; top: 28px; }
+  .data-footer { grid-column: 1; grid-row: 2; align-self: start; }
+  .main { grid-column: 2; grid-row: 1 / -1; }
+
+  .sidebar {
+    display: flex;
+    flex-direction: column;
+    gap: 22px;
+  }
+  .main { display: flex; flex-direction: column; gap: 32px; }
+  .col-primary, .col-secondary { display: flex; flex-direction: column; gap: 32px; }
+
+  .app-header {
+    margin-bottom: 0;
+    padding-bottom: 18px;
+    border-bottom: 1px solid var(--hairline);
+  }
+  .app-header h1 { font-size: 1.15rem; }
+
+  /* Sections become a vertical nav rail */
+  .section-switch {
+    position: static;
+    background: none;
+    padding-block: 0;
+    margin-bottom: 0;
+  }
+  .section-tabs { flex-direction: column; gap: 2px; overflow: visible; }
+  .tab {
+    width: 100%;
+    text-align: left;
+    justify-content: flex-start;
+    border-radius: 10px;
+    border-color: transparent;
+    background: transparent;
+    padding: 10px 12px;
+    font-size: 0.88rem;
+  }
+  .tab:hover:not(.active) { background: var(--gridline); }
+
+  .today-card { padding: 22px 20px; }
+  .panel { border-top: none; padding-top: 0; margin-bottom: 0; }
+  .panel + .panel { border-top: 1px solid var(--hairline); padding-top: 26px; }
+
+  .data-footer {
+    margin-top: 0;
+    padding-top: 22px;
+  }
+  .data-footer .data-actions { flex-direction: column; align-items: stretch; }
+  .data-footer .ghost-btn { text-align: center; justify-content: center; }
+}
+
+/* Wide enough for the day and the charts to sit side by side. */
+@media (min-width: 1200px) {
+  .main {
+    display: grid;
+    grid-template-columns: minmax(0, 430px) minmax(0, 1fr);
+    gap: 36px;
+    align-items: start;
+  }
+  .col-secondary { gap: 28px; }
+  .col-secondary .panel + .panel { padding-top: 24px; }
+}
+
+/* Only pin the day's card where it is sure to fit without clipping. */
+@media (min-width: 1200px) and (min-height: 860px) {
+  .col-primary { position: sticky; top: 28px; }
 }

@@ -12,22 +12,27 @@
 <body>
 <div class="app viz-root">
 
-  <header class="app-header">
-    <h1>Mi Sistema</h1>
-    <button id="theme-toggle" class="icon-btn" type="button" aria-label="Cambiar tema" title="Cambiar tema">◐</button>
-  </header>
+  <aside class="sidebar">
+    <header class="app-header">
+      <h1>Mi Sistema</h1>
+      <button id="theme-toggle" class="icon-btn" type="button" aria-label="Cambiar tema" title="Cambiar tema">◐</button>
+    </header>
 
-  <div class="section-switch">
-    <nav id="section-tabs" class="section-tabs" aria-label="Secciones"></nav>
-  </div>
+    <div class="section-switch">
+      <nav id="section-tabs" class="section-tabs" aria-label="Secciones"></nav>
+    </div>
+  </aside>
 
-  <section class="today-card" aria-labelledby="checkin-heading">
-    <div class="today-head">
-      <div class="today-title">
-        <h2 id="checkin-heading">Hoy</h2>
-        <p id="section-tagline" class="tagline"></p>
-      </div>
-      <button id="edit-toggle" class="ghost-btn" type="button">Editar</button>
+  <main class="main">
+   <div class="col-primary">
+
+    <section class="today-card" aria-labelledby="checkin-heading">
+      <div class="today-head">
+        <div class="today-title">
+          <h2 id="checkin-heading">Hoy</h2>
+          <p id="section-tagline" class="tagline"></p>
+        </div>
+        <button id="edit-toggle" class="ghost-btn" type="button">Editar</button>
     </div>
 
     <div class="date-nav">
@@ -46,6 +51,9 @@
       <button type="submit" class="primary-btn">Agregar</button>
     </form>
   </section>
+
+   </div>
+   <div class="col-secondary">
 
   <section class="panel" data-panel="stats" aria-labelledby="stats-heading">
     <div class="card-head">
@@ -94,6 +102,9 @@
       <div id="trend-table" class="table-view" hidden></div>
     </div>
   </section>
+
+   </div>
+  </main>
 
   <footer class="data-footer">
     <p class="data-note">Tus datos viven solo en este navegador.</p>
