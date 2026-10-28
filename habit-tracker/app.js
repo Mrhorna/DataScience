@@ -101,6 +101,7 @@
   let state = loadState();
   let activeSectionId = state.sections[0].id;
   let viewDate = new Date();
+  let editing = false;
   const uiBySection = {};
 
   function saveState() {
@@ -379,6 +380,7 @@
       btn.setAttribute('aria-current', s.id === activeSectionId ? 'page' : 'false');
       btn.addEventListener('click', () => {
         activeSectionId = s.id;
+        editing = false;
         renderAll();
       });
       nav.appendChild(btn);
@@ -440,9 +442,62 @@
   // ---------- daily check-in ----------
   function renderDatePicker() {
     const picker = document.getElementById('date-picker');
+    const todayStr = dateKey(new Date());
     picker.value = dateKey(viewDate);
-    picker.max = dateKey(new Date());
-    document.getElementById('next-day').disabled = dateKey(viewDate) === dateKey(new Date());
+    picker.max = todayStr;
+    document.getElementById('next-day').disabled = dateKey(viewDate) === todayStr;
+
+    const heading = document.getElementById('checkin-heading');
+    const yesterday = dateKey(addDays(new Date(), -1));
+    if (dateKey(viewDate) === todayStr) heading.textContent = 'Hoy';
+    else if (dateKey(viewDate) === yesterday) heading.textContent = 'Ayer';
+    else {
+      const label = viewDate.toLocaleDateString('es', { weekday: 'long', day: 'numeric', month: 'short' });
+      heading.textContent = label.charAt(0).toUpperCase() + label.slice(1);
+    }
+  }
+
+  function renderProgress() {
+    const section = currentSection();
+    const row = document.getElementById('progress-row');
+    row.innerHTML = '';
+    // The sleep section's headline is its duration readout, not a count of checks.
+    if (section.type === 'sleep' || !section.steps.length) { row.hidden = true; return; }
+    row.hidden = false;
+
+    const dateStr = dateKey(viewDate);
+    const done = section.steps.filter(s => isChecked(dateStr, s.id)).length;
+    const total = section.steps.length;
+    const pct = Math.round((done / total) * 100);
+
+    const count = document.createElement('span');
+    count.className = 'progress-count';
+    count.textContent = `${done}/${total}`;
+
+    const bar = document.createElement('div');
+    bar.className = 'progress-bar';
+    bar.setAttribute('role', 'progressbar');
+    bar.setAttribute('aria-valuenow', String(done));
+    bar.setAttribute('aria-valuemin', '0');
+    bar.setAttribute('aria-valuemax', String(total));
+    bar.setAttribute('aria-label', `${done} de ${total} completados`);
+    const fill = document.createElement('div');
+    fill.className = 'progress-fill';
+    fill.style.width = `${pct}%`;
+    bar.appendChild(fill);
+
+    const chip = document.createElement('span');
+    chip.className = 'state-chip' + (done === total ? ' done' : '');
+    chip.textContent = done === total ? 'Completo' : done === 0 ? 'Sin empezar' : 'En progreso';
+
+    row.append(count, bar, chip);
+  }
+
+  function renderEditMode() {
+    const btn = document.getElementById('edit-toggle');
+    btn.textContent = editing ? 'Listo' : 'Editar';
+    btn.classList.toggle('active', editing);
+    document.getElementById('add-item-form').hidden = !editing;
   }
 
   function renderCheckin() {
@@ -469,18 +524,23 @@
       const empty = document.createElement('p');
       empty.className = 'empty-state';
       empty.textContent = section.type === 'routine'
-        ? 'Esta rutina no tiene pasos. Agrega el primero abajo.'
-        : 'Aún no tienes hábitos aquí. Agrega el primero abajo.';
+        ? 'Esta rutina no tiene pasos. Toca Editar para agregar el primero.'
+        : 'Aún no tienes hábitos aquí. Toca Editar para agregar el primero.';
       body.appendChild(empty);
       return;
     }
 
     const list = document.createElement('ul');
     list.className = section.type === 'routine' ? 'routine-list' : 'habit-list';
+    if (editing) list.classList.add('editing');
 
     section.steps.forEach((step, index) => {
       const li = document.createElement('li');
-      li.className = section.type === 'routine' ? 'step-row' : 'habit-row';
+      li.className = 'step-item';
+
+      // A label makes the whole row toggle its checkbox, so the tap target is the row.
+      const row = document.createElement('label');
+      row.className = 'step-row';
 
       const dot = document.createElement('span');
       dot.className = 'habit-dot';
@@ -506,30 +566,32 @@
       checkbox.setAttribute('aria-label', `${step.name} - ${dateStr}`);
       checkbox.addEventListener('change', () => {
         setCheckin(dateStr, step.id, checkbox.checked);
+        renderProgress();
         renderStats();
         renderHeatmap();
         renderTrend();
       });
 
-      li.append(dot, main);
+      row.append(dot, main, checkbox);
+      li.appendChild(row);
+
+      const edit = document.createElement('div');
+      edit.className = 'step-edit';
 
       if (section.type === 'routine') {
-        const order = document.createElement('div');
-        order.className = 'step-order';
         const up = document.createElement('button');
         up.type = 'button';
-        up.textContent = '▲';
+        up.textContent = '↑';
         up.disabled = index === 0;
         up.setAttribute('aria-label', `Subir ${step.name}`);
-        up.addEventListener('click', () => { moveStep(section, index, -1); renderAll(); });
+        up.addEventListener('click', () => { moveStep(section, index, -1); renderCheckin(); });
         const down = document.createElement('button');
         down.type = 'button';
-        down.textContent = '▼';
+        down.textContent = '↓';
         down.disabled = index === section.steps.length - 1;
         down.setAttribute('aria-label', `Bajar ${step.name}`);
-        down.addEventListener('click', () => { moveStep(section, index, 1); renderAll(); });
-        order.append(up, down);
-        li.appendChild(order);
+        down.addEventListener('click', () => { moveStep(section, index, 1); renderCheckin(); });
+        edit.append(up, down);
       }
 
       const removeBtn = document.createElement('button');
@@ -537,14 +599,27 @@
       removeBtn.type = 'button';
       removeBtn.textContent = '✕';
       removeBtn.setAttribute('aria-label', `Eliminar ${step.name}`);
+      // Two taps to delete, in place: no native dialog, no accidental loss.
+      let armed = false;
       removeBtn.addEventListener('click', () => {
-        if (confirm(`¿Eliminar "${step.name}"? Se perderá su historial.`)) {
-          removeStep(section, step.id);
-          renderAll();
+        if (!armed) {
+          armed = true;
+          removeBtn.textContent = '¿Eliminar?';
+          removeBtn.classList.add('confirming');
+          setTimeout(() => {
+            if (!armed) return;
+            armed = false;
+            removeBtn.textContent = '✕';
+            removeBtn.classList.remove('confirming');
+          }, 4000);
+          return;
         }
+        removeStep(section, step.id);
+        renderAll();
       });
+      edit.appendChild(removeBtn);
+      li.appendChild(edit);
 
-      li.append(checkbox, removeBtn);
       list.appendChild(li);
 
       if (step.wakeWindow) {
@@ -1253,31 +1328,80 @@
     URL.revokeObjectURL(url);
   }
 
+  function showDataStatus(message, tone) {
+    const box = document.getElementById('data-status');
+    box.hidden = false;
+    box.className = 'data-status' + (tone ? ' ' + tone : '');
+    box.textContent = message;
+  }
+
   function importJson(file) {
     const reader = new FileReader();
     reader.onload = () => {
       let parsed;
       try { parsed = JSON.parse(reader.result); }
-      catch (e) { alert('Ese archivo no es un JSON válido.'); return; }
+      catch (e) { showDataStatus('Ese archivo no es un JSON válido.', 'error'); return; }
       if (!parsed || !Array.isArray(parsed.sections)) {
-        alert('Ese JSON no parece un respaldo de Mi Sistema.');
+        showDataStatus('Ese JSON no parece un respaldo de Mi Sistema.', 'error');
         return;
       }
-      if (!confirm('Esto reemplazará todos los datos de este navegador. ¿Continuar?')) return;
+      confirmImport(parsed);
+    };
+    reader.onerror = () => showDataStatus('No se pudo leer el archivo.', 'error');
+    reader.readAsText(file);
+  }
+
+  // Replacing the current data is destructive, so it gets an in-page confirmation
+  // rather than a native dialog.
+  function confirmImport(parsed) {
+    const days = new Set([
+      ...Object.keys(parsed.checkins || {}),
+      ...Object.keys(parsed.wakeTimes || {}),
+      ...Object.keys(parsed.bedTimes || {}),
+      ...Object.keys(parsed.energy || {}),
+    ]).size;
+
+    const box = document.getElementById('data-status');
+    box.hidden = false;
+    box.className = 'data-status confirm';
+    box.textContent = '';
+
+    const text = document.createElement('span');
+    text.textContent = `Respaldo con ${days} ${days === 1 ? 'día' : 'días'} de registros. Reemplazará todo lo que tienes en este navegador.`;
+
+    const actions = document.createElement('div');
+    actions.className = 'data-actions';
+
+    const confirmBtn = document.createElement('button');
+    confirmBtn.type = 'button';
+    confirmBtn.className = 'primary-btn';
+    confirmBtn.textContent = 'Reemplazar';
+    confirmBtn.addEventListener('click', () => {
       state = migrate(parsed);
       saveState();
       activeSectionId = state.sections[0].id;
+      editing = false;
       Object.keys(uiBySection).forEach(k => delete uiBySection[k]);
       renderAll();
-      alert('Respaldo restaurado.');
-    };
-    reader.readAsText(file);
+      showDataStatus('Respaldo restaurado.', 'ok');
+    });
+
+    const cancelBtn = document.createElement('button');
+    cancelBtn.type = 'button';
+    cancelBtn.className = 'ghost-btn';
+    cancelBtn.textContent = 'Cancelar';
+    cancelBtn.addEventListener('click', () => { box.hidden = true; });
+
+    actions.append(confirmBtn, cancelBtn);
+    box.append(text, actions);
   }
 
   // ---------- wiring ----------
   function renderAll() {
     renderTabs();
     renderDatePicker();
+    renderEditMode();
+    renderProgress();
     renderEnergyRow();
     renderCheckin();
     renderRangeChips();
@@ -1296,9 +1420,41 @@
   function goToDate(d) {
     viewDate = d;
     renderDatePicker();
+    renderProgress();
     renderEnergyRow();
     renderCheckin();
   }
+
+  document.getElementById('edit-toggle').addEventListener('click', () => {
+    editing = !editing;
+    renderEditMode();
+    renderCheckin();
+  });
+
+  // Collapsible analysis panels; the open/closed choice is a per-browser convenience.
+  const PANELS_KEY = 'habit-tracker-panels';
+  function loadPanelState() {
+    try { return JSON.parse(localStorage.getItem(PANELS_KEY)) || {}; }
+    catch (e) { return {}; }
+  }
+  const panelState = loadPanelState();
+  document.querySelectorAll('.collapse-btn').forEach(btn => {
+    const panel = btn.closest('.panel');
+    const key = panel.dataset.panel;
+    const body = document.getElementById(btn.getAttribute('aria-controls'));
+    if (panelState[key] === false) {
+      body.hidden = true;
+      btn.setAttribute('aria-expanded', 'false');
+    }
+    btn.addEventListener('click', () => {
+      const open = btn.getAttribute('aria-expanded') === 'true';
+      btn.setAttribute('aria-expanded', String(!open));
+      body.hidden = open;
+      panelState[key] = !open;
+      try { localStorage.setItem(PANELS_KEY, JSON.stringify(panelState)); }
+      catch (e) { /* storage unavailable: the choice just won't persist */ }
+    });
+  });
 
   document.getElementById('prev-day').addEventListener('click', () => goToDate(addDays(viewDate, -1)));
   document.getElementById('next-day').addEventListener('click', () => {
