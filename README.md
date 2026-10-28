@@ -22,6 +22,26 @@ La métrica destacada no es la racha sino la **fuerza**: una media móvil expone
 
 El motivo es de diseño, no estético: la investigación sobre abandono de estas apps señala la *streak anxiety* como causa principal, y el efecto de violación de abstinencia ("what-the-hell effect") explica por qué un solo fallo lleva a abandonar la meta entera. Un día perdido no afecta medible­mente la formación del hábito (Lally et al., 2010), así que castigarlo con un reinicio a cero desinforma.
 
+### Interfaz
+
+La app se usa a diario desde el celular, así que la pantalla está ordenada por rol y no como una pila de tarjetas iguales:
+
+- **Una sola superficie elevada** — el día de hoy — sobre paneles de análisis planos y plegables. Lo que haces todos los días domina; lo que revisas cada semana se mantiene disponible pero callado.
+- **La fila completa es el área de toque** (un `<label>` envuelve su checkbox), con 56px de alto mínimo, en vez de un checkbox de 22px.
+- **Las acciones destructivas viven detrás de "Editar"**, no al lado del checkbox que tocas cada mañana; eliminar pide una segunda confirmación en la propia fila.
+- **Progreso visible**: "3/5" con barra y estado, sin tener que contar.
+- Ningún diálogo nativo del navegador: confirmaciones y avisos se muestran en la página.
+- Objetivos de toque de 44px, estados de foco visibles, y respeto por `prefers-reduced-motion`.
+
+### Pruebas
+
+`habit-tracker/test/regression.js` cubre la fórmula de fuerza (recalculándola de forma independiente), el progreso, el registro de energía, el modo edición con su borrado en dos pasos, el ciclo completo de exportar/importar y el eslabón más débil.
+
+```bash
+cd habit-tracker && python3 -m http.server 8731 &
+npm i playwright-core && node test/regression.js
+```
+
 ### Datos
 
 Todo se guarda en el `localStorage` del navegador. La sección **Tus datos** permite:

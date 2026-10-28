@@ -2,8 +2,11 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <title>Mi Sistema</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" />
 <link rel="stylesheet" href="style.css" />
 </head>
 <body>
@@ -14,75 +17,95 @@
     <button id="theme-toggle" class="icon-btn" type="button" aria-label="Cambiar tema" title="Cambiar tema">◐</button>
   </header>
 
-  <nav id="section-tabs" class="section-tabs" aria-label="Secciones"></nav>
+  <div class="section-switch">
+    <nav id="section-tabs" class="section-tabs" aria-label="Secciones"></nav>
+  </div>
 
-  <section class="card" aria-labelledby="checkin-heading">
-    <div class="card-head">
-      <div>
-        <h2 id="checkin-heading">Registro diario</h2>
+  <section class="today-card" aria-labelledby="checkin-heading">
+    <div class="today-head">
+      <div class="today-title">
+        <h2 id="checkin-heading">Hoy</h2>
         <p id="section-tagline" class="tagline"></p>
       </div>
-      <div class="date-nav">
-        <button id="prev-day" class="icon-btn" type="button" aria-label="Día anterior">‹</button>
-        <input id="date-picker" type="date" />
-        <button id="next-day" class="icon-btn" type="button" aria-label="Día siguiente">›</button>
-        <button id="today-btn" class="ghost-btn" type="button">Hoy</button>
-      </div>
+      <button id="edit-toggle" class="ghost-btn" type="button">Editar</button>
     </div>
-    <div id="energy-row" class="energy-row"></div>
+
+    <div class="date-nav">
+      <button id="prev-day" class="icon-btn" type="button" aria-label="Día anterior">‹</button>
+      <input id="date-picker" type="date" aria-label="Fecha" />
+      <button id="next-day" class="icon-btn" type="button" aria-label="Día siguiente">›</button>
+      <button id="today-btn" class="ghost-btn" type="button">Hoy</button>
+    </div>
+
+    <div id="progress-row" class="progress-row"></div>
     <div id="checkin-body"></div>
-    <form id="add-item-form" class="add-habit-form">
+    <div id="energy-row" class="energy-row"></div>
+
+    <form id="add-item-form" class="add-habit-form" hidden>
       <input id="new-item-name" type="text" maxlength="40" required />
       <button type="submit" class="primary-btn">Agregar</button>
     </form>
   </section>
 
-  <section class="card" aria-labelledby="stats-heading">
+  <section class="panel" data-panel="stats" aria-labelledby="stats-heading">
     <div class="card-head">
-      <h2 id="stats-heading">Resumen</h2>
+      <button class="collapse-btn" type="button" aria-expanded="true" aria-controls="stats-panel">
+        <span class="caret" aria-hidden="true">▾</span>
+        <h2 id="stats-heading">Resumen</h2>
+      </button>
       <div class="filter-row" role="group" aria-label="Rango de cumplimiento">
         <button class="chip active" data-range="7" type="button">7 días</button>
         <button class="chip" data-range="30" type="button">30 días</button>
       </div>
     </div>
-    <div id="stats-body"></div>
+    <div id="stats-panel" class="panel-body">
+      <div id="stats-body"></div>
+    </div>
   </section>
 
-  <section class="card" aria-labelledby="heatmap-heading">
+  <section class="panel" data-panel="heatmap" aria-labelledby="heatmap-heading">
     <div class="card-head">
-      <h2 id="heatmap-heading">Calendario de constancia</h2>
+      <button class="collapse-btn" type="button" aria-expanded="true" aria-controls="heatmap-panel">
+        <span class="caret" aria-hidden="true">▾</span>
+        <h2 id="heatmap-heading">Calendario</h2>
+      </button>
       <div class="filter-row">
         <select id="heatmap-select" aria-label="Filtrar"></select>
-        <button id="heatmap-table-toggle" class="ghost-btn" type="button">Ver como tabla</button>
+        <button id="heatmap-table-toggle" class="ghost-btn" type="button">Tabla</button>
       </div>
     </div>
-    <div id="heatmap-wrap" class="heatmap-wrap"></div>
-    <div id="heatmap-table" class="table-view" hidden></div>
+    <div id="heatmap-panel" class="panel-body">
+      <div id="heatmap-wrap" class="heatmap-wrap"></div>
+      <div id="heatmap-table" class="table-view" hidden></div>
+    </div>
   </section>
 
-  <section class="card" aria-labelledby="trend-heading">
+  <section class="panel" data-panel="trend" aria-labelledby="trend-heading">
     <div class="card-head">
-      <h2 id="trend-heading">Tendencia semanal</h2>
-      <button id="trend-table-toggle" class="ghost-btn" type="button">Ver como tabla</button>
+      <button class="collapse-btn" type="button" aria-expanded="true" aria-controls="trend-panel">
+        <span class="caret" aria-hidden="true">▾</span>
+        <h2 id="trend-heading">Tendencia semanal</h2>
+      </button>
+      <button id="trend-table-toggle" class="ghost-btn" type="button">Tabla</button>
     </div>
-    <div id="trend-legend" class="legend"></div>
-    <div id="trend-chart" class="trend-chart"></div>
-    <div id="trend-table" class="table-view" hidden></div>
+    <div id="trend-panel" class="panel-body">
+      <div id="trend-legend" class="legend"></div>
+      <div id="trend-chart" class="trend-chart"></div>
+      <div id="trend-table" class="table-view" hidden></div>
+    </div>
   </section>
 
-  <section class="card" aria-labelledby="data-heading">
-    <div class="card-head">
-      <h2 id="data-heading">Tus datos</h2>
-    </div>
-    <p class="data-note">Todo vive solo en este navegador. Exporta para respaldar o analizar en Excel/Python.</p>
+  <footer class="data-footer">
+    <p class="data-note">Tus datos viven solo en este navegador.</p>
     <div class="data-actions">
       <button id="export-csv" class="ghost-btn" type="button">Exportar CSV</button>
       <button id="export-json" class="ghost-btn" type="button">Respaldo JSON</button>
-      <label class="ghost-btn file-btn">Importar respaldo
+      <label class="ghost-btn file-btn">Importar
         <input id="import-json" type="file" accept="application/json,.json" hidden />
       </label>
     </div>
-  </section>
+    <div id="data-status" class="data-status" hidden></div>
+  </footer>
 
 </div>
 <script src="app.js"></script>
